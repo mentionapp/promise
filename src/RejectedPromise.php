@@ -7,7 +7,19 @@ namespace React\Promise;
  */
 class RejectedPromise implements ExtendedPromiseInterface, CancellablePromiseInterface
 {
+    private static $tracer;
+
     private $reason;
+
+    public static function setTracer($tracer)
+    {
+        self::$tracer = $tracer;
+    }
+
+    public static function getTracer()
+    {
+        return self::$tracer;
+    }
 
     public function __construct($reason = null)
     {
@@ -16,12 +28,20 @@ class RejectedPromise implements ExtendedPromiseInterface, CancellablePromiseInt
         }
 
         $this->reason = $reason;
+
+        if (null !== $tracer = self::$tracer) {
+            $tracer->instanciated($this, $reason);
+        }
     }
 
     public function then(callable $onFulfilled = null, callable $onRejected = null, callable $onProgress = null)
     {
         if (null === $onRejected) {
             return $this;
+        }
+
+        if (null !== $tracer = self::$tracer) {
+            $tracer->handled($this);
         }
 
         try {
@@ -35,6 +55,10 @@ class RejectedPromise implements ExtendedPromiseInterface, CancellablePromiseInt
 
     public function done(callable $onFulfilled = null, callable $onRejected = null, callable $onProgress = null)
     {
+        if (null !== $tracer = self::$tracer) {
+            $tracer->handled($this);
+        }
+
         if (null === $onRejected) {
             throw UnhandledRejectionException::resolve($this->reason);
         }
@@ -42,6 +66,9 @@ class RejectedPromise implements ExtendedPromiseInterface, CancellablePromiseInt
         $result = $onRejected($this->reason);
 
         if ($result instanceof self) {
+            if (null !== $tracer = self::$tracer) {
+                $tracer->handled($this);
+            }
             throw UnhandledRejectionException::resolve($result->reason);
         }
 
@@ -75,5 +102,12 @@ class RejectedPromise implements ExtendedPromiseInterface, CancellablePromiseInt
 
     public function cancel()
     {
+    }
+
+    public function __destruct()
+    {
+        if (null !== $tracer = self::$tracer) {
+            $tracer->destroyed($this);
+        }
     }
 }
